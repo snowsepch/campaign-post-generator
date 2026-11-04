@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>檔期操盤貼文產生器｜上傳操盤 PDF 自動產貼文＋圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js"></script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --soft:#fafafa; --softer:#f4f4f5;
+    --text:#18181b; --muted:#71717a; --faint:#a1a1aa;
+    --line:#ececec; --line2:#e4e4e7; --line3:#d4d4d8;
+    --accent:#2563eb; --accent-soft:#eff4ff;
+    --hi:#18181b;
+    --radius:12px; --radius-sm:8px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Inter","Noto Sans TC",-apple-system,system-ui,sans-serif;
+    font-weight:400; line-height:1.55; letter-spacing:-.003em;
+    padding:0 0 96px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:0 24px;}
+  ::selection{background:var(--accent-soft);}
+
+  /* HEADER */
+  header.top{padding:56px 0 30px;}
+  .ey{font-size:12.5px; font-weight:500; color:var(--accent); letter-spacing:.01em;}
+  h1{font-size:clamp(26px,3.6vw,36px); font-weight:700; line-height:1.12; margin:10px 0 14px; letter-spacing:-.02em;}
+  .sub{color:var(--muted); font-size:15px; max-width:62ch;}
+  .stats{display:flex; gap:28px; margin-top:22px; flex-wrap:wrap;}
+  .stat .n{font-size:22px; font-weight:700; letter-spacing:-.02em;}
+  .stat .l{font-size:12px; color:var(--faint); margin-top:1px;}
+  .src{margin-top:20px; font-size:12.5px; color:var(--faint); line-height:1.7; border-left:2px solid var(--line2); padding-left:12px;}
+
+  /* SETTINGS + UPLOAD */
+  .setup{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:24px;}
+  @media(max-width:680px){.setup{grid-template-columns:1fr;}}
+  .card-box{border:1px solid var(--line2); border-radius:var(--radius); background:var(--soft); padding:16px 18px;}
+  .card-box h2{font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:7px; margin-bottom:12px;}
+  .card-box h2 .ic{color:var(--accent);}
+  .field{display:flex; flex-direction:column; gap:4px; margin-bottom:10px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{font-size:11.5px; color:var(--faint);}
+  .field input{font:inherit; font-size:14px; color:var(--text); background:#fff; border:1px solid var(--line2); border-radius:var(--radius-sm); height:38px; padding:0 12px;}
+  .field input:focus{outline:0; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .field.row2{flex-direction:row; gap:10px;}
+  .field.row2 > div{flex:1; display:flex; flex-direction:column; gap:4px;}
+
+  .drop{border:2px dashed var(--line3); border-radius:var(--radius); background:#fff; padding:22px 18px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s; display:flex; flex-direction:column; align-items:center; gap:9px; justify-content:center; min-height:148px;}
+  .drop:hover,.drop.over{border-color:var(--accent); background:var(--accent-soft);}
+  .drop .ic{font-size:30px; color:var(--accent);}
+  .drop .t{font-size:14px; font-weight:600;}
+  .drop .d{font-size:12px; color:var(--faint); line-height:1.6;}
+  .drop .badge-net{font-size:11px; color:var(--faint); background:var(--softer); border:1px solid var(--line); padding:2px 9px; border-radius:20px;}
+  #fileInput{display:none;}
+  .parse-status{font-size:12.5px; margin-top:6px; line-height:1.6;}
+  .parse-status.ok{color:#15803d;} .parse-status.err{color:#b91c1c;} .parse-status.run{color:var(--muted);}
+
+  /* CONTROLS */
+  .controls{position:sticky; top:0; z-index:20; background:rgba(255,255,255,.86); backdrop-filter:saturate(180%) blur(10px); -webkit-backdrop-filter:saturate(180%) blur(10px); border-bottom:1px solid var(--line); padding:14px 0; margin-top:30px;}
+  .controls-inner{max-width:900px; margin:0 auto; padding:0 24px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .search{flex:1; min-width:220px; display:flex; align-items:center; gap:9px; background:var(--soft); border:1px solid var(--line2); border-radius:var(--radius-sm); padding:0 13px; height:42px;}
+  .search:focus-within{border-color:var(--accent); background:#fff; box-shadow:0 0 0 3px var(--accent-soft);}
+  .search .mg{width:15px; height:15px; flex:none; border:2px solid var(--faint); border-radius:50%; position:relative;}
+  .search .mg::after{content:""; position:absolute; width:6px; height:2px; background:var(--faint); right:-4px; bottom:-1px; transform:rotate(45deg); border-radius:2px;}
+  .search input{flex:1; border:0; outline:0; background:transparent; font:inherit; font-size:15px; color:var(--text);}
+  .search input::placeholder{color:var(--faint);}
+  .sel{position:relative;}
+  .sel select{appearance:none; -webkit-appearance:none; font:inherit; font-size:14px; font-weight:500; color:var(--text); background:var(--soft); border:1px solid var(--line2); border-radius:var(--radius-sm); height:42px; padding:0 34px 0 14px; cursor:pointer;}
+  .sel select:focus{outline:0; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .sel::after{content:""; position:absolute; right:14px; top:50%; width:7px; height:7px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:translateY(-70%) rotate(45deg); pointer-events:none;}
+  .reset{height:42px; padding:0 14px; font:inherit; font-size:13.5px; font-weight:500; color:var(--muted); background:transparent; border:1px solid var(--line2); border-radius:var(--radius-sm); cursor:pointer;}
+  .reset:hover{color:var(--text); border-color:var(--line3);}
+
+  .toprow{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:26px 0 8px;}
+  .resultline{font-size:12.5px; color:var(--faint);}
+  .btn-sm{height:34px; padding:0 14px; font:inherit; font-size:12.5px; font-weight:500; color:var(--muted); background:transparent; border:1px solid var(--line2); border-radius:var(--radius-sm); cursor:pointer; white-space:nowrap;}
+  .btn-sm:hover{color:var(--text); border-color:var(--line3);}
+
+  /* GROUP (accordion) */
+  .grp{border-top:1px solid var(--line); --c:#2563eb; --cs:#eef3ff;}
+  .grp[hidden]{display:none;}
+  .grp summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:12px; padding:15px 12px; user-select:none; border-radius:10px; transition:background .15s;}
+  .grp summary:hover{background:var(--soft);}
+  .grp summary::-webkit-details-marker{display:none;}
+  .grp summary:hover{background:var(--cs);}
+  .grp[open]>summary{background:var(--cs);}
+  .grp summary:hover .grp-name{color:var(--c);}
+  .grp[open] .grp-name{color:var(--c);}
+  .chev{width:9px; height:9px; border-right:2px solid var(--faint); border-bottom:2px solid var(--faint); transform:rotate(-45deg); transition:transform .22s ease; flex:none; margin-right:2px;}
+  .grp summary .chev{border-color:var(--c);}
+  .grp[open] .chev{transform:rotate(45deg);}
+  .grp-name{font-size:16px; font-weight:600; letter-spacing:-.01em; transition:color .15s;}
+  .grp-count{font-size:12px; color:var(--c); background:var(--cs); font-weight:600; padding:2px 10px; border-radius:20px;}
+  .grp-bar{flex:1; height:1px;}
+  .grp-hi{font-size:11px; font-weight:600; color:#fff; background:var(--c); padding:2px 9px; border-radius:20px;}
+
+  .grp-body{padding:6px 4px 22px 23px; display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+  @media(max-width:680px){.grp-body{grid-template-columns:1fr; padding-left:6px;}}
+  @media(prefers-reduced-motion:no-preference){
+    .grp[open] .grp-body{animation:slidein .26s ease;}
+    @keyframes slidein{from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:none;}}
+  }
+
+  /* POST CARD */
+  .post{background:#fff; border:1px solid var(--line2); border-radius:var(--radius); overflow:hidden; display:flex; flex-direction:column; box-shadow:0 1px 2px rgba(24,24,27,.04); transition:box-shadow .18s, border-color .18s, transform .18s;}
+  .post:hover{border-color:var(--line3); box-shadow:0 8px 26px rgba(24,24,27,.10); transform:translateY(-2px);}
+  .post[hidden]{display:none;}
+  .preview{position:relative; background:var(--c); background-image:radial-gradient(circle at 86% 16%, rgba(255,255,255,.22), transparent 48%); color:#fff; padding:15px 16px 17px; min-height:120px; display:flex; flex-direction:column; gap:10px;}
+  .pv-top{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .pv-brand{font-size:11px; font-weight:500; opacity:.92; letter-spacing:.02em;}
+  .pv-title{font-size:19px; font-weight:700; line-height:1.3; letter-spacing:-.01em; margin-top:auto; text-shadow:0 1px 2px rgba(0,0,0,.08);}
+  .preview .badge.hi{background:#fff; color:var(--c);}
+  .preview .badge.mid{background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.45);}
+  .post-body{padding:14px 16px 14px; display:flex; flex-direction:column;}
+  .post-meta{font-size:12px; color:var(--faint); margin-top:0; line-height:1.5;}
+  .badge{font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; flex:none; margin-top:1px;}
+  .badge.hi{background:var(--c); color:#fff;}
+  .badge.mid{background:transparent; color:var(--muted); border:1px solid var(--line3);}
+  .caption{white-space:pre-wrap; font-size:13px; line-height:1.72; color:var(--text); background:var(--soft); border:1px solid var(--line); border-radius:var(--radius-sm); padding:13px 14px; margin-top:11px;}
+  .seg{display:inline-flex; flex-wrap:wrap; background:var(--softer); border:1px solid var(--line2); border-radius:8px; padding:2px; margin-top:11px;}
+  .seg-b{font:inherit; font-size:12px; font-weight:500; color:var(--muted); background:transparent; border:0; padding:5px 13px; border-radius:6px; cursor:pointer; transition:color .12s;}
+  .seg-b.on{background:#fff; color:var(--text); box-shadow:0 1px 2px rgba(24,24,27,.08);}
+  .seg-b:not(.on):hover{color:var(--text);}
+  .seg + .caption{margin-top:8px;}
+  .post-actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .act{font:inherit; font-size:12.5px; font-weight:500; padding:8px 13px; border-radius:var(--radius-sm); cursor:pointer; border:1px solid var(--line2); background:#fff; color:var(--text); transition:background .15s,border-color .15s;}
+  .act:hover{border-color:var(--line3); background:var(--soft);}
+  .act:active{transform:translateY(1px);}
+  .act.primary{background:var(--text); color:#fff; border-color:var(--text);}
+  .act.primary:hover{background:#000;}
+  .act.done{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:12px; padding-top:11px; border-top:1px dashed var(--line2);}
+  .tags::before{content:"hashtag"; font-size:10.5px; color:var(--faint); width:100%; margin-bottom:-3px;}
+  .tags span{font-size:11.5px; color:var(--faint); background:var(--softer); border:1px solid var(--line); padding:2px 7px; border-radius:6px;}
+  .tags span.hit{background:var(--accent-soft); color:var(--accent); border-color:#cfe0ff;}
+
+  .empty{padding:48px 4px; text-align:center; color:var(--faint); font-size:14px;}
+  .empty[hidden]{display:none;}
+
+  /* PANEL (deal editor) */
+  .panel{margin-top:14px; border:1px solid var(--line2); border-radius:var(--radius); overflow:hidden; background:var(--soft);}
+  .panel summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:12px; padding:16px 18px; user-select:none;}
+  .panel summary::-webkit-details-marker{display:none;}
+  .panel summary .ttl{font-size:14.5px; font-weight:600;}
+  .panel summary .desc{font-size:12.5px; color:var(--faint); font-weight:400;}
+  .panel-body{padding:14px 18px 20px; background:#fff; border-top:1px solid var(--line);}
+  .first-section{margin-top:34px;}
+
+  .deal-row{display:grid; grid-template-columns:120px 1fr 1.4fr 32px; gap:8px; align-items:center; margin-bottom:8px;}
+  @media(max-width:680px){.deal-row{grid-template-columns:1fr 1fr; }}
+  .deal-row select,.deal-row input{font:inherit; font-size:13px; height:36px; border:1px solid var(--line2); border-radius:var(--radius-sm); padding:0 10px; background:#fff; min-width:0;}
+  .deal-row select:focus,.deal-row input:focus{outline:0; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .deal-del{border:1px solid var(--line2); background:#fff; border-radius:var(--radius-sm); height:36px; cursor:pointer; color:var(--faint); font-size:16px;}
+  .deal-del:hover{color:var(--accent); border-color:#f3c8c8;}
+  .deal-head{display:grid; grid-template-columns:120px 1fr 1.4fr 32px; gap:8px; font-size:11px; color:var(--faint); margin-bottom:7px;}
+  @media(max-width:680px){.deal-head{display:none;}}
+  .editor-actions{display:flex; gap:9px; flex-wrap:wrap; margin-top:14px;}
+
+  footer{margin-top:44px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--faint); line-height:1.8;}
+
+  /* ════ 海報元件（與社群貼文洞察出圖引擎同源） ════ */
+  .poster .p-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .poster .brand{display:flex;align-items:center;gap:13px}
+  .poster .brand .dot{width:18px;height:18px;border-radius:999px}
+  .poster .brand .name{font-size:27px;font-weight:800;color:#1b1b1b;letter-spacing:.01em}
+  .poster .p-title{font-size:78px;font-weight:900;line-height:1.16;letter-spacing:-1px;color:#141414}
+  .poster .p-sub{font-size:31px;font-weight:500;line-height:1.55;color:#5c5c5c;max-width:840px}
+  .poster .p-panel{border-radius:44px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .poster .p-panel i{color:#fff;line-height:1;display:block}
+  .poster .p-panel svg.picon{display:block;fill:#fff}
+  .poster .p-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
+  .poster .addr{font-size:25px;font-weight:600;color:#8c8c8c;line-height:1.5}
+  .poster .addr b{color:#3a3a3a;font-weight:800}
+  .poster .tag-chip{font-size:27px;font-weight:800;background:#fff;border:2.5px solid;border-radius:999px;padding:12px 26px;white-space:nowrap}
+  .poster{width:1080px;height:1080px;padding:72px;display:flex;flex-direction:column;position:relative;overflow:hidden;font-family:"Noto Sans TC","Inter",sans-serif}
+  .poster .p-title{margin-top:34px}
+  .poster .p-sub{margin-top:20px}
+  .poster .p-panel{flex:1;min-height:340px;margin:40px 0}
+  .poster .p-panel i{font-size:360px}
+  .poster .p-panel svg.picon{width:360px;height:360px}
+  .poster.wide{width:1200px;height:900px;padding:62px;display:flex;flex-direction:row;gap:54px}
+  .poster.wide .p-col{flex:1;display:flex;flex-direction:column;min-width:0}
+  .poster.wide .p-title{margin-top:28px;font-size:62px;line-height:1.15}
+  .poster.wide .p-sub{margin-top:16px;font-size:27px;max-width:none}
+  .poster.wide .p-foot{margin-top:auto}
+  .poster.wide .p-panel{flex:0 0 44%;align-self:stretch;margin:0;border-radius:40px}
+  .poster.wide .p-panel i{font-size:300px}
+  .poster.wide .p-panel svg.picon{width:300px;height:300px}
+  .poster.wide .brand .name{font-size:23px}
+  .poster.wide .brand .dot{width:15px;height:15px}
+  .poster.wide .addr{font-size:22px}
+  .poster.wide .tag-chip{font-size:23px;padding:10px 22px}
+  .poster.gbp{width:1200px;height:675px;padding:50px 56px;display:flex;flex-direction:row;gap:46px}
+  .poster.gbp .p-col{flex:1;display:flex;flex-direction:column;min-width:0}
+  .poster.gbp .p-title{margin-top:18px;font-size:54px;line-height:1.12}
+  .poster.gbp .p-sub{margin-top:14px;font-size:24px;max-width:none}
+  .poster.gbp .p-foot{margin-top:auto}
+  .poster.gbp .p-panel{flex:0 0 40%;align-self:stretch;margin:0;border-radius:34px}
+  .poster.gbp .p-panel i{font-size:240px}
+  .poster.gbp .p-panel svg.picon{width:240px;height:240px}
+  .poster.gbp .brand .name{font-size:22px}
+  .poster.gbp .brand .dot{width:14px;height:14px}
+  .poster.gbp .addr{font-size:21px}
+  .poster.gbp .tag-chip{font-size:22px;padding:9px 20px}
+
+  /* 產生器面板（modal） */
+  .gen-modal{position:fixed; inset:0; z-index:100; background:rgba(15,17,21,.55); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px;}
+  .gen-modal[hidden]{display:none;}
+  .gen-box{background:#fff; border-radius:16px; width:min(660px,100%); max-height:94vh; overflow:auto; box-shadow:0 30px 80px rgba(0,0,0,.35); display:flex; flex-direction:column;}
+  .gen-head{display:flex; align-items:center; justify-content:space-between; padding:15px 20px; border-bottom:1px solid var(--line);}
+  .gen-head .t{font-size:15px; font-weight:600;}
+  .gen-x{border:0; background:none; font-size:24px; line-height:1; color:var(--muted); cursor:pointer; padding:2px 8px;}
+  .gen-x:hover{color:var(--text);}
+  .gen-controls{display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line);}
+  .gen-seg{display:inline-flex; background:var(--softer); border:1px solid var(--line2); border-radius:8px; padding:2px;}
+  .gen-seg button{font:inherit; font-size:12.5px; font-weight:500; color:var(--muted); background:none; border:0; padding:6px 12px; border-radius:6px; cursor:pointer;}
+  .gen-seg button.on{background:#fff; color:var(--text); box-shadow:0 1px 2px rgba(24,24,27,.1);}
+  .gen-seg .lab{align-self:center; font-size:11px; color:var(--faint); padding:0 4px 0 9px;}
+  .gen-preview{padding:20px; background:var(--soft); display:flex; justify-content:center;}
+  .gen-frame{position:relative; overflow:hidden; border-radius:14px; box-shadow:0 10px 34px rgba(0,0,0,.16); background:#fff;}
+  .gen-frame .scaler{position:absolute; top:0; left:0; transform-origin:top left; will-change:transform;}
+  .gen-actions{padding:15px 20px; display:flex; gap:12px; align-items:center; border-top:1px solid var(--line);}
+  .gen-status{font-size:12.5px; color:var(--muted);}
+  .gen-note{padding:0 20px 18px; font-size:12px; color:var(--faint); line-height:1.65;}
+
+  @media print{
+    .controls{position:static; backdrop-filter:none; background:#fff;}
+    .post-actions,.editor-actions,.drop,.panel summary .desc{display:none;}
+    .grp,.panel{break-inside:avoid;}
+    .post{break-inside:avoid;}
+    .grp summary{cursor:default;}
+    .preview,.badge,.grp-count,.grp-hi{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    @page{size:A4; margin:14mm;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="ey" id="eyebrow">檔期操盤 · 社群貼文</div>
+    <h1>檔期操盤貼文產生器</h1>
+    <p class="sub">上傳操盤 PDF，工具在本機解析整檔活動，依社群貼文洞察規則自動產出貼文與宣傳圖。檔案不離開瀏覽器、不外傳。</p>
+    <div class="stats">
+      <div class="stat"><div class="n" id="stDeals">0</div><div class="l">檔期活動</div></div>
+      <div class="stat"><div class="n" id="stLines">0</div><div class="l">產品線</div></div>
+      <div class="stat"><div class="n" id="stDays">0</div><div class="l">檔期天數</div></div>
+      <div class="stat"><div class="n" id="stGifts">0</div><div class="l">加碼好禮</div></div>
+    </div>
+    <p class="src">貼文依社群貼文洞察規則：標題勾人不上課口吻、Apple 名稱大小寫正確、0 個 em-dash、導購採需求引導不硬塞組合。只露出活動利益（現折／滿萬送配件金／售完為止），不揭露會員價與促銷價絕對數字。<br><span id="srcDate"></span></p>
+
+    <div class="setup">
+      <div class="card-box">
+        <h2><i class="ph-bold ph-storefront ic"></i>門市資訊（套進貼文與海報）</h2>
+        <div class="field"><label>店名</label><input id="inName" type="text" /></div>
+        <div class="field"><label>地址</label><input id="inAddr" type="text" placeholder="請填完整門市地址" /></div>
+        <div class="field row2">
+          <div><label>在地標籤</label><input id="inTag" type="text" /></div>
+          <div><label>檔期起訖（例 6/19-7/9）</label><input id="inDate" type="text" /></div>
+        </div>
+      </div>
+      <div class="card-box" style="display:flex;flex-direction:column;">
+        <h2><i class="ph-bold ph-file-pdf ic"></i>上傳操盤 PDF</h2>
+        <label class="drop" id="drop" for="fileInput" style="flex:1;">
+          <i class="ph-bold ph-upload-simple ic"></i>
+          <span class="t">點此選檔，或把操盤 PDF 拖進來</span>
+          <span class="d">本機解析（pdf.js），檔案不上傳。解析後可逐筆校正再產生貼文。</span>
+          <span class="badge-net">解析需連網載入元件 · 檔案不外傳</span>
+        </label>
+        <input id="fileInput" type="file" accept="application/pdf,.pdf" />
+        <div class="parse-status" id="parseStatus"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <details class="panel" id="editorPanel">
+    <summary>
+      <span class="chev"></span>
+      <span class="ttl">檔期活動清單（可編輯校正）</span>
+      <span class="grp-bar"></span>
+      <span class="desc" id="editorDesc">確認產品線、家族與活動文字無誤，再產生貼文</span>
+    </summary>
+    <div class="panel-body">
+      <div class="deal-head"><span>產品線</span><span>產品家族</span><span>活動文字（現折／滿萬送／售完為止…）</span><span></span></div>
+      <div id="dealRows"></div>
+      <div class="editor-actions">
+        <button class="act" id="addRow" type="button">＋ 新增一列</button>
+        <button class="act primary" id="applyRows" type="button">套用並重新產生貼文</button>
+        <button class="act" id="reloadPreset" type="button">還原預載檔期</button>
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="controls">
+  <div class="controls-inner">
+    <div class="search">
+      <span class="mg"></span>
+      <input id="q" type="text" placeholder="搜尋產品、活動或關鍵字（17 Pro、配件金、售完…）" autocomplete="off" />
+    </div>
+    <div class="sel"><select id="catSel"><option value="">所有產品線</option></select></div>
+    <div class="sel"><select id="typeSel">
+      <option value="">所有活動類型</option>
+      <option value="discount">現折</option>
+      <option value="gift_protector">現折＋送保護貼</option>
+      <option value="giftcard">滿萬送配件金</option>
+      <option value="percent">現折趴數</option>
+      <option value="clearance">現貨售完</option>
+      <option value="accessory">配件加購</option>
+    </select></div>
+    <button class="reset" id="resetBtn" type="button">清除</button>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="toprow">
+    <div class="resultline" id="resultline"></div>
+    <button class="btn-sm" id="toggleAll" type="button">全部展開</button>
+  </div>
+  <div id="groups"></div>
+  <div class="empty" id="empty" hidden>沒有符合條件的活動，換個關鍵字或清除篩選。</div>
+
+  <footer>
+    <span id="footName"></span> · 檔期操盤貼文　|　單檔 HTML，可 Cmd+P 列印 A4。<br>
+    所有貼文與海報皆依操盤活動利益撰寫，不含會員價／促銷價絕對數字。出圖與解析需連網載入元件，操盤資料全程留在本機。
+  </footer>
+</main>
+
+<div class="gen-modal" id="genModal" hidden>
+  <div class="gen-box">
+    <div class="gen-head"><span class="t">貼文宣傳圖產生器</span><button class="gen-x" id="genClose" type="button" aria-label="關閉">×</button></div>
+    <div class="gen-controls">
+      <div class="gen-seg" id="genModeSeg"><span class="lab">尺寸</span>
+        <button data-m="square" class="on" type="button">方形 1:1</button>
+        <button data-m="wide" type="button">橫式 4:3</button>
+        <button data-m="gbp" type="button">商家 16:9</button>
+      </div>
+      <div class="gen-seg" id="genFmtSeg"><span class="lab">格式</span>
+        <button data-f="png" class="on" type="button">PNG</button>
+        <button data-f="jpg" type="button">JPG</button>
+      </div>
+    </div>
+    <div class="gen-preview"><div class="gen-frame" id="genFrame"><div class="scaler" id="genScaler"></div></div></div>
+    <div class="gen-actions"><button class="act primary" id="genDownload" type="button">下載這張圖</button><span class="gen-status" id="genStatus"></span></div>
+    <p class="gen-note">圖示依活動類型自動配對（現折→折扣章、配件金→禮物、保護貼→盾牌、售完→倒數）。</p>
+  </div>
+</div>
+
+<script>
+/* ════════════════ 門市設定（可編輯，套進貼文＋海報） ════════════════ */
+const STORE = {
+  name : "Apple Shop 高雄右昌",
+  addr : "",
+  tag  : "高雄右昌",
+  date : "6/19-7/9",
+};
+function storeSlug(){ return STORE.tag.replace(/\s/g,"") + "AppleShop"; }
+
+/* ════════════════ 預載檔期：2026 06/19-07/09 操盤（已逐筆核對） ════════════════ */
+/* 格式：[產品線, 產品家族, 活動原文]。暫無交期者不產貼文（不推廣無貨品項）。 */
+const PRESET = [];
+
+const LINE_ORDER = ["iPhone","Mac","iPad","Apple Watch","AirPods","配件"];
+const LINE_COLOR = {
+  "iPhone":["#1d4ed8","#eef3ff"], "Mac":["#475569","#eef1f5"], "iPad":["#0369a1","#e6f2fb"],
+  "Apple Watch":["#047857","#e6f5ef"], "AirPods":["#6d28d9","#f3edfc"], "配件":["#b45309","#fcf1e2"],
+};
+const LINE_GENCAT = {"iPhone":"iphone","Mac":"mac","iPad":"ipad","Apple Watch":"watch","AirPods":"airpods","配件":"accessory"};
+
+/* ════════════════ Apple 名稱大小寫校正 ════════════════ */
+const CASE_RULES = [
+  [/airpods pro/gi,"AirPods Pro"],[/airpods/gi,"AirPods"],
+  [/apple watch/gi,"Apple Watch"],[/apple pencil pro/gi,"Apple Pencil Pro"],[/apple pencil/gi,"Apple Pencil"],
+  [/applecare/gi,"AppleCare"],[/apple/gi,"Apple"],
+  [/iphone/gi,"iPhone"],[/ipad pro/gi,"iPad Pro"],[/ipad air/gi,"iPad Air"],[/ipad mini/gi,"iPad mini"],[/ipad/gi,"iPad"],
+  [/macbook pro/gi,"MacBook Pro"],[/macbook air/gi,"MacBook Air"],[/macbook/gi,"MacBook"],
+  [/mac mini/gi,"Mac mini"],[/mac studio/gi,"Mac Studio"],[/imac/gi,"iMac"],[/\bmac\b/gi,"Mac"],
+  [/magsafe/gi,"MagSafe"],[/studio display/gi,"Studio Display"],
+];
+function fixCase(s){let r=s; CASE_RULES.forEach(([re,rep])=>{r=r.replace(re,rep);}); return r;}
+
+/* ════════════════ 活動分類：把原文解析成結構 ════════════════ */
+function classify(raw){
+  const t = raw.replace(/[\s,，]/g,"");
+  if(/暫無交期/.test(t)) return {type:"nostock"};
+  let m;
+  if(m = t.match(/滿萬送(\d+)配件金/)) return {type:"giftcard", gift:m[1]};
+  if(m = t.match(/(?:主機)?加購(?:可享)?(\d+)%/)) return {type:"accessory", pct:m[1]+"%"};
+  const clearance = /售完為止|現貨售完/.test(t);
+  const protM = t.match(/再送市價?(\d+)?(保護殼貼組|保護殼|保護貼)/);
+  const discM = t.match(/現折(\d+)起/) || t.match(/現折(\d+)(?!%)/);
+  const pctM  = t.match(/現折(\d+%)/);
+  if(protM && discM) return {type:"gift_protector", disc:discM[1], protName:protM[2], protPrice:protM[1]||"", clearance};
+  if(pctM) return {type:"percent", pct:pctM[1], clearance};
+  if(discM) return {type:"discount", disc:discM[1], clearance};
+  if(clearance) return {type:"clearance"};
+  return {type:"discount", note:raw};
+}
+
+/* 把原文整理成好讀的活動文字（顯示用） */
+function prettyOffer(raw){
+  let t = raw.trim();
+  t = t.replace(/現折(\d)/g,"現折 $1")
+       .replace(/(\d)起/g,"$1 起")
+       .replace(/起再送/g,"起，再送")
+       .replace(/市價(\d)/g,"市價 $1")
+       .replace(/(\d)(保護貼|保護殼貼組|保護殼)/g,"$1 $2")
+       .replace(/滿萬送(\d)/g,"滿萬送 $1")
+       .replace(/(\d)配件金/g,"$1 配件金")
+       .replace(/可享(\d)/g,"可享 $1")
+       .replace(/(\d)優惠/g,"$1 優惠")
+       .replace(/%優惠/g,"% 優惠")
+       .replace(/\s*256G\s*現貨售完為止/g,"（256G 現貨售完為止）")
+       .replace(/起\s*現貨售完為止/g,"起（現貨售完為止）")
+       .replace(/\s+/g," ")
+       .trim();
+  return t;
+}
+
+/* ════════════════ 由原始三欄建立完整活動物件 ════════════════ */
+function buildDeal(line, family, raw){
+  const fam = fixCase(family.trim());
+  const c = classify(raw);
+  return Object.assign({ line, family:fam, raw:raw.trim(), offer:prettyOffer(raw) }, c);
+}
+let DEALS = [];
+function loadPreset(){ DEALS = PRESET.map(r=>buildDeal(r[0],r[1],r[2])); }
+
+/* ════════════════ 貼文文案產生（依社群貼文洞察規則） ════════════════ */
+function familyTag(fam){ return "#"+fam.replace(/[\s吋]/g,""); }
+function genTags(d){
+  const base = ["#限時優惠","#Apple優惠", familyTag(d.family)];
+  if(d.line==="iPhone") base.push("#iPhone舊換新");
+  if(d.line==="Mac"||d.line==="iPad") base.push("#教育價");
+  if(d.type==="gift_protector") base.push("#免費貼到好");
+  if(d.type==="giftcard") base.push("#滿額送好禮");
+  base.push("#"+STORE.tag, "#AppleShop");
+  return [...new Set(base)];
+}
+function genTitle(d){
+  const f=d.family;
+  switch(d.type){
+    case "gift_protector": return `${f} 這檔現折 ${d.disc} 起，還直接送保護貼`;
+    case "giftcard":       return `買 ${f} 滿萬，再送 ${d.gift} 配件金`;
+    case "percent":        return `${f} 這檔現折 ${d.pct}，入手正是時候`;
+    case "clearance":      return `${f} 現貨倒數，售完就沒了`;
+    case "accessory":      return `買主機加購原廠配件，這檔再享 95 折`;
+    case "discount":
+    default:               return d.clearance ? `${f} 這檔現折 ${d.disc} 起，現貨有限`
+                                              : `在考慮 ${f}？這檔現折 ${d.disc} 起`;
+  }
+}
+function genCaption(d){
+  const f=d.family; let lead, body;
+  switch(d.type){
+    case "gift_protector":
+      lead = `在看 ${f} 的，這檔可以出手了。`;
+      body = `本檔 ${f} 現折 ${d.disc} 起，買就直接送${d.protName||"保護貼"}，到手就有防護，不用再另外加購。新機怕資料搬不過去？我們現場幫你把舊機照片、LINE 一次轉好。`;
+      break;
+    case "giftcard":
+      lead = `想換 ${f} 的這檔最有感。`;
+      body = `本檔買 ${f} 滿萬再送 ${d.gift} 元配件金，可直接折抵保護殼、轉接器或滑鼠鍵盤，等於入手就把常用配件一起補齊。學生與教職人員還能搭教育價，來門市幫你試算。`;
+      break;
+    case "percent":
+      lead = `${f} 這檔直接現折 ${d.pct}。`;
+      body = `不確定規格怎麼挑、容量要多大？來門市說你的用途，我們幫你選剛剛好的那台，順便把優惠跟分期一次算清楚。`;
+      break;
+    case "clearance":
+      lead = `${f} 這批是現貨，賣完就沒了。`;
+      body = `想入手的別等，現貨數量有限、售完不補。來門市或私訊我們，確認還有沒有你要的容量與顏色。`;
+      break;
+    case "accessory":
+      lead = `買 Mac、iPad 的別忘了這個。`;
+      body = `本檔主機加購原廠配件可享 5% 優惠，巧控鍵盤、Apple Pencil、保護殼一起帶更划算。不確定哪些配件配你的機型？來門市幫你對。`;
+      break;
+    case "discount":
+    default:
+      lead = `一直在等 ${f} 的，這檔現折 ${d.disc} 起。`;
+      body = (d.clearance ? `現貨數量有限、售完為止，要的別等。` : "") +
+             `想知道實際到手價、舊機能折多少？帶舊機來門市現場估價，當天就知道折抵金額，資料也一次幫你轉好。`;
+      break;
+  }
+  const tags = genTags(d).join(" ");
+  return `${lead}\n\n${body}\n\n本檔活動：${d.offer}\n檔期 ${STORE.date}，數量有限售完為止。\n\n📍 ${STORE.name}｜${STORE.addr}\n\n${tags}`;
+}
+function genShort(d){
+  const f=d.family; let l1,l2,l3;
+  switch(d.type){
+    case "gift_protector": l1=`${f} 出手點到了 🎯`; l2=`現折 ${d.disc} 起`; l3=`還直接送${d.protName||"保護貼"}`; break;
+    case "giftcard":       l1=`買 ${f} 🎁`; l2=`滿萬送 ${d.gift} 配件金`; l3=`常用配件一起補齊`; break;
+    case "percent":        l1=`${f}`; l2=`這檔現折 ${d.pct}`; l3=`入手正是時候`; break;
+    case "clearance":      l1=`${f} 現貨倒數 ⏳`; l2=`售完不補`; l3=`要的別等`; break;
+    case "accessory":      l1=`主機加購配件 🛍️`; l2=`這檔再享 95 折`; l3=`常用配件一起帶`; break;
+    case "discount":
+    default:               l1=`在等 ${f}？`; l2=`這檔現折 ${d.disc} 起`; l3=d.clearance?`現貨有限`:`舊機還能折`; break;
+  }
+  return `${l1}\n${l2}\n${l3}\n\n👉 來門市 ${STORE.name}\n檔期 ${STORE.date}`;
+}
+/* 顧問口吻版：同理心開場＋誠實建議，省下的差價當下次升級本錢，只露活動利益不揭絕對價 */
+function genCaptionAdvisor(d){
+  const f=d.family; let lead, body;
+  switch(d.type){
+    case "gift_protector":
+      lead = `常有人問我，${f} 現在買會不會太早或太晚。`;
+      body = `老實說，這檔剛好是划算的時間點。現折 ${d.disc} 起，買就直接送${d.protName||"保護貼"}，等於到手當天就有防護，不用另外加購，也不用自己再跑一趟貼膜。如果你是從舊機換過來，資料轉移這件事不用自己摸索，帶舊機來門市，我們陪你一起把照片、聯絡人搬過去。`;
+      break;
+    case "giftcard":
+      lead = `想換 ${f} 的，這檔可以認真考慮了。`;
+      body = `買滿萬再送 ${d.gift} 元配件金，這筆錢不是額外的小禮，是可以直接折抵保護殼、轉接器或滑鼠鍵盤的本錢，等於入手主機的同時，常用配件一起補齊，不用另外多花一筆。學生或教職員身分別浪費，教育價可以疊上去一起算，來門市讓我們幫你試算最划算的組合。`;
+      break;
+    case "percent":
+      lead = `${f} 這檔現折 ${d.pct}，我的建議是先想清楚用途再決定。`;
+      body = `折扣是實在的，但規格選錯，省下的錢很快就會花在後悔上。不確定容量、規格該怎麼選，帶著你平常的使用習慣來門市，我們陪你比對，不會硬推銷你不需要的等級，把優惠跟分期一起算清楚給你看。`;
+      break;
+    case "clearance":
+      lead = `${f} 這批是現貨，老實跟你說，數量真的有限。`;
+      body = `我不會為了製造緊張感亂講，但這批賣完之後，同樣的組合不一定能等到下一批。如果你已經在考慮，建議別拖，來門市或私訊我們，當場確認還有沒有你要的容量與顏色，省得白跑一趟。`;
+      break;
+    case "accessory":
+      lead = `買 Mac、iPad 的人，常常會漏算一件事。`;
+      body = `主機加購原廠配件這檔可享 95 折，巧控鍵盤、Apple Pencil、保護殼一起帶，通常比之後想到再單獨買划算。我的建議是，趁下單的時候一次配好，而不是用了才發現不夠用，再花一次運費跟時間補。不確定哪些配件配你的機型，來門市讓我們幫你對好。`;
+      break;
+    case "discount":
+    default:
+      lead = `一直在等 ${f} 的，我可以老實跟你說我的看法。`;
+      body = (d.clearance ? `現貨數量有限，這點不誇大，售完真的不補。` : `這檔現折 ${d.disc} 起，是實打實的優惠，不是噱頭。`) +
+             `如果你手上還有舊機，別讓它放著貶值，帶來門市現場估價，折抵直接算進新機費用裡，省下來的這筆差價，才是你下次升級真正的本錢。資料轉移我們也會陪你處理好，不用自己摸索。`;
+      break;
+  }
+  const tags = genTags(d).join(" ");
+  return `${lead}\n\n${body}\n\n本檔活動：${d.offer}\n檔期 ${STORE.date}，數量有限售完為止。\n\n📍 ${STORE.name}｜${STORE.addr}\n\n${tags}`;
+}
+/* LINE 群組版：條列重點，無 hashtag，開頭直接講重點方便滑動閱讀 */
+function genLineGroup(d){
+  const f=d.family; let lead, bullets;
+  switch(d.type){
+    case "gift_protector":
+      lead = `${f} 現在入手正是時候。`;
+      bullets = [`現折 ${d.disc} 起`, `買就送${d.protName||"保護貼"}，到手就有防護`, `新機資料轉移，我們現場幫你處理`];
+      break;
+    case "giftcard":
+      lead = `想換 ${f} 的，這檔可以認真考慮。`;
+      bullets = [`買滿萬送 ${d.gift} 配件金`, `可折抵保護殼、轉接器或滑鼠鍵盤`, `學生教職可疊教育價，來店幫你試算`];
+      break;
+    case "percent":
+      lead = `${f} 這檔現折 ${d.pct}。`;
+      bullets = [`不確定規格容量怎麼挑`, `來門市說你的用途，我們幫你選剛好的那台`, `優惠跟分期一次算給你看`];
+      break;
+    case "clearance":
+      lead = `${f} 這批是現貨，賣完不補。`;
+      bullets = [`數量有限，售完為止`, `想要的別等，來店或私訊先問還有沒有`, `到店我們幫你確認容量與顏色`];
+      break;
+    case "accessory":
+      lead = `買 Mac、iPad 的別漏算這個。`;
+      bullets = [`主機加購原廠配件享 95 折`, `巧控鍵盤、Apple Pencil、保護殼一起帶`, `不確定哪些配件配你的機型，來門市幫你對`];
+      break;
+    case "discount":
+    default:
+      lead = `一直在等 ${f} 的，這檔可以出手了。`;
+      bullets = [`現折 ${d.disc} 起`, d.clearance?`現貨數量有限，售完不補`:`優惠與分期一次算清楚`, `舊機也能帶來估價，折抵直接算進新機費用`];
+      break;
+  }
+  const body = bullets.map(b=>`・${b}`).join("\n");
+  return `${lead}\n\n${body}\n\n本檔活動：${d.offer}\n檔期 ${STORE.date}，數量有限售完為止。\n\n📍 ${STORE.name}｜${STORE.addr}`;
+}
+/* Threads 版：3-4 段短句，語氣隨性口語，無 hashtag */
+function genThreads(d){
+  const f=d.family;
+  switch(d.type){
+    case "gift_protector":
+      return [
+        `${f} 這檔現折 ${d.disc} 起，買就直接送${d.protName||"保護貼"}。`,
+        `到手當天就有防護，不用再另外跑一趟貼膜。`,
+        `新機資料轉移不用自己摸索，帶舊機來門市，我們陪你一次搬好照片、聯絡人。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+    case "giftcard":
+      return [
+        `想換 ${f} 的，這檔買滿萬送 ${d.gift} 配件金。`,
+        `這筆錢可以直接折抵保護殼、轉接器或滑鼠鍵盤，等於主機跟配件一起補齊。`,
+        `學生或教職員別浪費身分，教育價可以疊上去一起算，來門市幫你試算最划算的組合。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+    case "percent":
+      return [
+        `${f} 這檔現折 ${d.pct}，先想清楚用途再決定比較划算。`,
+        `規格選錯，省下的錢很快就花在後悔上。`,
+        `帶著平常的使用習慣來門市，我們陪你比對，把優惠跟分期一起算給你看。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+    case "clearance":
+      return [
+        `${f} 這批是現貨，數量真的有限。`,
+        `賣完之後，同樣的組合不一定能等到下一批。`,
+        `已經在考慮的別拖，來門市或私訊我們，當場確認還有沒有你要的容量與顏色。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+    case "accessory":
+      return [
+        `買 Mac、iPad 的人，常常會漏算一件事。`,
+        `主機加購原廠配件這檔可享 95 折，巧控鍵盤、Apple Pencil、保護殼一起帶比之後單獨買划算。`,
+        `不確定哪些配件配你的機型，來門市讓我們幫你對好。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+    case "discount":
+    default:
+      return [
+        `一直在等 ${f} 的，這檔現折 ${d.disc} 起。`,
+        d.clearance ? `現貨數量有限，這點不誇大，售完真的不補。` : `這是實打實的優惠，不是噱頭。`,
+        `手上有舊機別讓它放著貶值，帶來門市現場估價，折抵直接算進新機費用裡。`,
+        `📍 ${STORE.name}｜${STORE.addr}`,
+      ];
+  }
+}
+function shortBenefit(d){
+  switch(d.type){
+    case "gift_protector": return "現折再送保護貼";
+    case "giftcard":       return `送 ${d.gift} 配件金`;
+    case "percent":        return `現折 ${d.pct}`;
+    case "clearance":      return "現貨倒數";
+    case "accessory":      return "加購 95 折";
+    default:               return `現折 ${d.disc||""} 起`.replace(/\s+起/,d.disc?" 起":"優惠");
+  }
+}
+const TYPE_LABEL = {discount:"現折", gift_protector:"現折＋送保護貼", giftcard:"滿萬送配件金", percent:"現折趴數", clearance:"現貨售完", accessory:"配件加購", nostock:"暫無交期"};
+const TYPE_ICON  = {discount:"ph-seal-percent", gift_protector:"ph-shield-check", giftcard:"ph-gift", percent:"ph-seal-percent", clearance:"ph-timer", accessory:"ph-shopping-bag", nostock:"ph-clock-countdown"};
+
+/* ════════════════ 海報引擎（與社群貼文洞察出圖同源，擴充產品線色） ════════════════ */
+const CATS = {
+  iphone   : {m:'#1d4ed8', bg:'#eef3ff'},
+  mac      : {m:'#475569', bg:'#eef1f5'},
+  ipad     : {m:'#0369a1', bg:'#e6f2fb'},
+  watch    : {m:'#047857', bg:'#e6f5ef'},
+  airpods  : {m:'#6d28d9', bg:'#f3edfc'},
+  accessory: {m:'#b45309', bg:'#fcf1e2'},
+};
+const SVG_CACHE={};
+function bare(n){ return n.replace(/^ph-/,''); }
+async function fetchIcon(name){
+  const b=bare(name);
+  if(SVG_CACHE[b]!==undefined) return SVG_CACHE[b];
+  SVG_CACHE[b]='';
+  try{
+    const r=await fetch(`https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2.1.1/assets/bold/${b}-bold.svg`);
+    if(r.ok){ const t=await r.text(); SVG_CACHE[b]=t.replace(/^[\s\S]*?<svg[^>]*>/i,'').replace(/<\/svg>[\s\S]*$/i,''); }
+  }catch(e){}
+  return SVG_CACHE[b];
+}
+function iconMarkup(name){
+  const b=bare(name);
+  if(SVG_CACHE[b]) return `<svg class="picon" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="#fff">${SVG_CACHE[b]}</svg>`;
+  return `<i class="ph-bold ${name}"></i>`;
+}
+function splitTitle(t){
+  if(t.includes('\n')) return t;
+  const ch=[...t]; let best=-1, mid=ch.length/2;
+  for(let i=2;i<ch.length-1;i++){ if('，、？！。：'.includes(ch[i])){ if(best<0||Math.abs(i-mid)<Math.abs(best-mid)) best=i; } }
+  if(best>0) return ch.slice(0,best+1).join('')+'\n'+ch.slice(best+1).join('');
+  if(ch.length>9){ const m=Math.ceil(ch.length/2); return ch.slice(0,m).join('')+'\n'+ch.slice(m).join(''); }
+  return t;
+}
+function dealToGenCard(d){
+  return {
+    cat: LINE_GENCAT[d.line]||'iphone',
+    title: splitTitle(genTitle(d)),
+    sub: d.offer,
+    tag: shortBenefit(d),
+    icon: TYPE_ICON[d.type]||'ph-seal-percent',
+  };
+}
+function posterHTML(c, mode){
+  const p=CATS[c.cat]||CATS.iphone;
+  const titleHTML=(c.title||'').split('\n').join('<br>');
+  const head=`<div class="p-head"><div class="brand"><span class="dot" style="background:${p.m}"></span><span class="name">${STORE.name}</span></div></div>`;
+  const title=`<div class="p-title">${titleHTML}</div>`;
+  const sub=`<div class="p-sub">${c.sub||''}</div>`;
+  const panel=`<div class="p-panel" style="background:${p.m}">${iconMarkup(c.icon)}</div>`;
+  const foot=`<div class="p-foot"><div class="addr">${STORE.addr}<br><b>${STORE.name}</b></div><span class="tag-chip" style="color:${p.m};border-color:${p.m}">${c.tag||''}</span></div>`;
+  if(mode==='wide'||mode==='gbp'){
+    const cls=mode==='gbp'?'gbp':'wide';
+    return `<div class="poster ${cls}" style="background:${p.bg}"><div class="p-col">${head}${title}${sub}${foot}</div>${panel}</div>`;
+  }
+  return `<div class="poster" style="background:${p.bg}">${head}${title}${sub}${panel}${foot}</div>`;
+}
+let _fontCSS;
+async function getFontCSSOnce(node){
+  if(_fontCSS!==undefined) return _fontCSS;
+  try{ _fontCSS=await Promise.race([htmlToImage.getFontEmbedCSS(node), new Promise((_,r)=>setTimeout(()=>r('t'),8000))]); }
+  catch(e){ _fontCSS=''; }
+  return _fontCSS;
+}
+async function nodeToImg(node, fmt){
+  const base={pixelRatio:2, cacheBust:true};
+  const draw=opt=> fmt==='jpg' ? htmlToImage.toJpeg(node,{...opt,quality:0.92}) : htmlToImage.toPng(node,opt);
+  try{ const css=await getFontCSSOnce(node); return await draw({...base, fontEmbedCSS:css}); }
+  catch(e){ return await draw({...base, skipFonts:true}); }
+}
+
+/* ════════════════ 篩選狀態 ════════════════ */
+const state = {q:"", cat:"", type:""};
+const catSel  = document.getElementById("catSel");
+const typeSel = document.getElementById("typeSel");
+const qInput  = document.getElementById("q");
+function postable(){ return DEALS.filter(d=>d.type!=="nostock"); }
+
+function rebuildCatOptions(){
+  catSel.innerHTML='<option value="">所有產品線</option>';
+  LINE_ORDER.forEach(c=>{ if(postable().some(p=>p.line===c)){ const o=document.createElement("option"); o.value=c; o.textContent=c; catSel.appendChild(o); } });
+}
+function dealMatch(d){
+  if(state.cat && d.line!==state.cat) return false;
+  if(state.type && d.type!==state.type) return false;
+  if(state.q){
+    const hay=(d.family+" "+d.line+" "+d.offer+" "+d.raw+" "+genTitle(d)+" "+(TYPE_LABEL[d.type]||"")).toLowerCase();
+    if(!hay.includes(state.q)) return false;
+  }
+  return true;
+}
+
+/* ════════════════ 建群組 ════════════════ */
+const groupsEl=document.getElementById("groups");
+function buildGroups(){
+  groupsEl.innerHTML="";
+  LINE_ORDER.forEach(line=>{
+    const list=postable().filter(d=>d.line===line);
+    if(!list.length) return;
+    const giftN=list.filter(d=>d.type==="giftcard"||d.type==="gift_protector").length;
+    const det=document.createElement("details"); det.className="grp"; det.dataset.cat=line;
+    const col=LINE_COLOR[line]||["#b91c1c","#fceaea"];
+    det.style.setProperty("--c", col[0]); det.style.setProperty("--cs", col[1]);
+    const sum=document.createElement("summary");
+    sum.innerHTML=`<span class="chev"></span><span class="grp-name">${line}</span><span class="grp-count">${list.length} 檔</span><span class="grp-bar"></span>${giftN?`<span class="grp-hi">${giftN} 加碼</span>`:""}`;
+    const body=document.createElement("div"); body.className="grp-body";
+    list.forEach(d=>{
+      const post=document.createElement("div"); post.className="post"; post.dataset.fam=d.family;
+      const isGift=(d.type==="giftcard"||d.type==="gift_protector");
+      const badge=isGift?`<span class="badge hi">加碼好禮</span>`:`<span class="badge mid">${TYPE_LABEL[d.type]||""}</span>`;
+      const tags=genTags(d).map(k=>`<span data-raw="${k.toLowerCase()}">${k}</span>`).join("");
+      const seg=`<div class="seg"><button class="seg-b on" type="button" data-mode="full">完整貼文</button><button class="seg-b" type="button" data-mode="story">限動短版</button><button class="seg-b" type="button" data-mode="advisor">顧問口吻</button><button class="seg-b" type="button" data-mode="line">LINE群組</button><button class="seg-b" type="button" data-mode="threads">Threads</button></div>`;
+      post.innerHTML=`
+        <div class="preview">
+          <div class="pv-top"><span class="pv-brand">${STORE.name}</span>${badge}</div>
+          <div class="pv-title">${genTitle(d)}</div>
+        </div>
+        <div class="post-body">
+          <div class="post-meta">${d.offer}　·　${line}</div>
+          ${seg}
+          <div class="caption"></div>
+          <div class="post-actions">
+            <button class="act primary copycap" type="button">複製完整貼文</button>
+            <button class="act mkimg" type="button">做成貼文圖</button>
+          </div>
+          <div class="tags">${tags}</div>
+        </div>`;
+      const capEl=post.querySelector(".caption");
+      const copyBtn=post.querySelector(".copycap");
+      let mode="full";
+      const modeLabel={story:"複製限動短版", advisor:"複製顧問口吻文案", line:"複製LINE群組文案", threads:"複製Threads文案", full:"複製完整貼文"};
+      function currentText(){
+        if(mode==="story") return genShort(d);
+        if(mode==="advisor") return genCaptionAdvisor(d);
+        if(mode==="line") return genLineGroup(d);
+        if(mode==="threads") return genThreads(d).map((t,i)=>`【${i+1}】${t}`).join("\n\n");
+        return genCaption(d);
+      }
+      function refresh(){
+        capEl.textContent = currentText();
+        copyBtn.textContent = modeLabel[mode] || "複製完整貼文";
+      }
+      refresh();
+      post.querySelectorAll(".seg-b").forEach(b=>b.addEventListener("click",()=>{
+        mode=b.dataset.mode;
+        post.querySelectorAll(".seg-b").forEach(x=>x.classList.toggle("on", x===b));
+        refresh();
+      }));
+      copyBtn.addEventListener("click",e=>{
+        const txt=currentText();
+        navigator.clipboard.writeText(txt).then(()=>{e.target.textContent="已複製 ✓"; e.target.classList.add("done"); setTimeout(()=>{refresh(); e.target.classList.remove("done");},1500);});
+      });
+      post.querySelector(".mkimg").addEventListener("click",()=>openGenModal(d));
+      body.appendChild(post);
+    });
+    det.appendChild(sum); det.appendChild(body);
+    groupsEl.appendChild(det);
+  });
+}
+
+function render(){
+  let shown=0;
+  document.querySelectorAll(".grp").forEach(det=>{
+    let groupShown=0;
+    det.querySelectorAll(".post").forEach(post=>{
+      const d=postable().find(x=>x.family===post.dataset.fam);
+      if(!d){ post.hidden=true; return; }
+      const ok=dealMatch(d);
+      post.hidden=!ok;
+      if(ok){ groupShown++; shown++; }
+      post.querySelectorAll(".tags span").forEach(s=>{ s.classList.toggle("hit", !!state.q && s.dataset.raw.includes(state.q)); });
+    });
+    det.hidden=groupShown===0;
+    if(groupShown>0 && (state.q||state.cat||state.type)) det.open=true;
+    else if(!state.q && !state.cat && !state.type) det.open=false;
+  });
+  const emptyEl=document.getElementById("empty");
+  emptyEl.hidden = shown>0;
+  emptyEl.textContent = postable().length===0
+    ? "尚未載入檔期活動。請上傳本期操盤 PDF，或展開上方「檔期活動清單」手動新增。"
+    : "沒有符合條件的活動，換個關鍵字或清除篩選。";
+  const f=(state.q||state.cat||state.type);
+  document.getElementById("resultline").textContent = f ? `符合 ${shown} / ${postable().length} 檔` : `共 ${postable().length} 檔活動，點產品線展開`;
+}
+
+/* ════════════════ 統計 + 文字 ════════════════ */
+function parseDays(range){
+  const m=range.match(/(\d+)\s*\/\s*(\d+)\D+(\d+)\s*\/\s*(\d+)/);
+  if(!m) return 0;
+  const y=2026;
+  const a=new Date(y, +m[1]-1, +m[2]);
+  let b=new Date(y, +m[3]-1, +m[4]);
+  if(b<a) b=new Date(y+1, +m[3]-1, +m[4]);
+  return Math.round((b-a)/86400000)+1;
+}
+function updateStats(){
+  const ps=postable();
+  document.getElementById("stDeals").textContent=ps.length;
+  document.getElementById("stLines").textContent=new Set(ps.map(d=>d.line)).size;
+  document.getElementById("stDays").textContent=parseDays(STORE.date)||"0";
+  document.getElementById("stGifts").textContent=ps.filter(d=>d.type==="giftcard"||d.type==="gift_protector").length;
+  document.getElementById("eyebrow").textContent=`${STORE.name} · 檔期操盤`;
+  document.getElementById("footName").textContent=STORE.name;
+  document.getElementById("srcDate").textContent=`本檔期 ${STORE.date}　·　共 ${ps.length} 檔活動`;
+}
+function rerenderAll(){ rebuildCatOptions(); buildGroups(); render(); updateStats(); openFirst(); prefetchIcons(); }
+function openFirst(){ const g=document.querySelector(".grp:not([hidden])"); if(g) g.open=true; }
+
+/* ════════════════ 活動清單編輯器 ════════════════ */
+const dealRowsEl=document.getElementById("dealRows");
+function lineSelectHTML(sel){
+  return `<select class="dr-line">${LINE_ORDER.map(l=>`<option ${l===sel?"selected":""}>${l}</option>`).join("")}</select>`;
+}
+function buildEditor(){
+  dealRowsEl.innerHTML="";
+  DEALS.forEach(d=>addEditorRow(d.line, d.family, d.raw));
+  if(!DEALS.length) addEditorRow();   // 空殼狀態給一列空白方便手動輸入
+  document.getElementById("editorDesc").textContent=`目前 ${DEALS.length} 列　·　確認後按「套用並重新產生貼文」`;
+}
+function addEditorRow(line="iPhone", family="", raw=""){
+  const row=document.createElement("div"); row.className="deal-row";
+  row.innerHTML=`${lineSelectHTML(line)}<input class="dr-fam" type="text" value="${family.replace(/"/g,'&quot;')}" placeholder="例：iPhone 17 Pro"><input class="dr-raw" type="text" value="${raw.replace(/"/g,'&quot;')}" placeholder="例：現折＿＿起／滿萬送＿＿配件金／售完為止"><button class="deal-del" type="button" title="刪除">×</button>`;
+  row.querySelector(".deal-del").addEventListener("click",()=>row.remove());
+  dealRowsEl.appendChild(row);
+}
+function applyEditor(){
+  const rows=[...dealRowsEl.querySelectorAll(".deal-row")];
+  const next=[];
+  rows.forEach(r=>{
+    const line=r.querySelector(".dr-line").value;
+    const fam=r.querySelector(".dr-fam").value.trim();
+    const raw=r.querySelector(".dr-raw").value.trim();
+    if(fam && raw) next.push(buildDeal(line, fam, raw));
+  });
+  if(!next.length){ alert("清單是空的，請至少保留一列。"); return; }
+  DEALS=next;
+  rerenderAll();
+  document.getElementById("editorDesc").textContent=`已套用 ${DEALS.length} 列　·　貼文已更新`;
+}
+
+/* ════════════════ PDF 解析（pdf.js，本機） ════════════════ */
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+const FAMILIES = [
+  "iPhone 16e","iPhone 17e","iPhone 16 Plus","iPhone 16","iPhone 17 Pro Max","iPhone 17 Pro","iPhone 17","iPhone Air",
+  "MacBook Neo","MacBook Air 15 M5","MacBook Air 13 M5","MacBook Pro 16 M5 Pro","MacBook Pro 16","MacBook Pro 14 M5","iMac M4","Mac mini M4","Mac Studio","Studio Display",
+  "iPad mini 7th","iPad 11吋","iPad Air 13吋 M4","iPad Air 11吋 M4","iPad Air 13吋 M3","iPad Air13吋 M3","iPad Air 11吋 M3","iPad Pro 13吋 M5","iPad Pro 11吋 M5",
+  "Apple Watch Ultra 3","Apple Watch SE 3","Apple Watch S11","AirPods Pro 3","AirPods Max","AirPods 4","原廠配件","原廠殼",
+];
+function famLine(fam){
+  if(/^iPhone/.test(fam)) return "iPhone";
+  if(/^(MacBook|iMac|Mac mini|Mac Studio|Studio Display)/.test(fam)) return "Mac";
+  if(/^iPad/.test(fam)) return "iPad";
+  if(/^Apple Watch/.test(fam)) return "Apple Watch";
+  if(/^AirPods/.test(fam)) return "AirPods";
+  return "配件";
+}
+const OFFER_RE=/(現折\s*[\d,]+\s*%?\s*起?(?:再送[^。\n]*?(?:保護貼|保護殼貼組|保護殼))?|滿萬送\s*\d+\s*配件金|現有庫存售完為止|現貨售完為止|售完為止|暫無交期|(?:主機)?加購可享\s*\d+\s*%\s*優惠)/g;
+
+async function parsePDF(buf){
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const out=[]; const seen=new Set();
+  for(let pg=1; pg<=pdf.numPages; pg++){
+    const page=await pdf.getPage(pg);
+    const tc=await page.getTextContent();
+    const vh=page.getViewport({scale:1}).height;
+    const items=tc.items.map(it=>({s:(it.str||"").trim(), x:it.transform[4], y:vh-it.transform[5]})).filter(it=>it.s);
+    const fams=[], offers=[];
+    // 家族標籤：限定左欄（x<140）且精確比對家族名，排除中欄品名
+    items.forEach(it=>{
+      if(it.x>=140) return;
+      for(const F of FAMILIES){
+        if(it.s===F || new RegExp("^"+F.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*\\d*$").test(it.s)){
+          fams.push({fam:fixCase(F), y:it.y}); break;
+        }
+      }
+    });
+    // 活動字串
+    items.forEach(it=>{ let m; OFFER_RE.lastIndex=0; while((m=OFFER_RE.exec(it.s))!==null){ offers.push({t:m[1].replace(/\s+/g,""), y:it.y}); } });
+    if(!fams.length) continue;
+    fams.sort((a,b)=>a.y-b.y);
+    // 以相鄰家族標籤的中點切「責任區段」，把落在同段內的活動全部合併（解決多行活動被算成兩筆）
+    const bounds=[-Infinity];
+    for(let i=0;i<fams.length-1;i++) bounds.push((fams[i].y+fams[i+1].y)/2);
+    bounds.push(Infinity);
+    const bucket=fams.map(()=>[]);
+    offers.forEach(o=>{ for(let i=0;i<fams.length;i++){ if(o.y>=bounds[i] && o.y<bounds[i+1]){ bucket[i].push(o); break; } } });
+    fams.forEach((f,i)=>{
+      if(seen.has(f.fam)) return;
+      const offs=bucket[i].sort((a,b)=>a.y-b.y).map(o=>o.t);
+      if(!offs.length) return;
+      let raw=offs.join("").replace(/現有庫存售完為(?!止)/g,"現有庫存售完為止");
+      seen.add(f.fam);
+      out.push({line:famLine(f.fam), family:f.fam, raw});
+    });
+  }
+  return out;
+}
+
+async function handleFile(file){
+  const st=document.getElementById("parseStatus");
+  if(!file){ return; }
+  if(!window.pdfjsLib){ st.className="parse-status err"; st.textContent="PDF 元件未載入，請連網後重新整理頁面。"; return; }
+  if(!/\.pdf$/i.test(file.name) && file.type!=="application/pdf"){ st.className="parse-status err"; st.textContent="請選擇 PDF 檔。"; return; }
+  st.className="parse-status run"; st.textContent="解析中…（檔案在本機處理，不會上傳）";
+  try{
+    const buf=await file.arrayBuffer();
+    const parsed=await parsePDF(buf);
+    if(!parsed.length){
+      st.className="parse-status err";
+      st.textContent="沒解析到活動。可能是 PDF 版式不同，請在下方「檔期活動清單」手動輸入或貼上。";
+    }else{
+      DEALS=parsed.map(p=>buildDeal(p.line,p.family,p.raw));
+      // 由檔名推檔期（如 0619-0709 → 6/19-7/9）
+      const fm=file.name.match(/(\d{2})(\d{2})\D*(\d{2})(\d{2})/);
+      if(fm){ STORE.date=`${+fm[1]}/${+fm[2]}-${+fm[3]}/${+fm[4]}`; document.getElementById("inDate").value=STORE.date; }
+      buildEditor(); rerenderAll();
+      document.getElementById("editorPanel").open=true;
+      st.className="parse-status ok";
+      st.textContent=`已解析 ${DEALS.length} 檔（自動草稿）。操盤版式密集處可能位移，請到下方「檔期活動清單」逐筆對照 PDF 校正後再產生貼文與圖。`;
+    }
+  }catch(e){
+    console.error(e);
+    st.className="parse-status err";
+    st.textContent="解析失敗，請改用下方清單手動輸入，或確認檔案是有效 PDF。";
+  }
+}
+
+/* ════════════════ 出圖面板 ════════════════ */
+const POSTER_DIM={wide:[1200,900], square:[1080,1080], gbp:[1200,675]};
+const genState={mode:'square', fmt:'png', deal:null};
+const genModal=document.getElementById('genModal');
+const genScaler=document.getElementById('genScaler');
+const genFrame=document.getElementById('genFrame');
+const genStatus=document.getElementById('genStatus');
+function renderGenPreview(){
+  const d=genState.deal; if(!d) return;
+  const card=dealToGenCard(d);
+  genScaler.innerHTML=posterHTML(card, genState.mode);
+  const [w,h]=POSTER_DIM[genState.mode];
+  if(genState.mode==='square'){
+    const titleEl=genScaler.querySelector('.p-title');
+    if(titleEl){ const maxLen=Math.max(...(card.title||'').split('\n').map(l=>[...l].length));
+      titleEl.style.fontSize = maxLen<=8?'76px':maxLen<=10?'66px':maxLen<=12?'58px':'50px'; }
+  }
+  const pw=Math.min(560, window.innerWidth-90);
+  genFrame.style.width=pw+'px'; genFrame.style.height=(pw*h/w)+'px';
+  genScaler.style.transform='scale('+(pw/w)+')';
+}
+async function openGenModal(d){
+  genState.deal=d; genStatus.textContent='';
+  genModal.hidden=false; document.body.style.overflow='hidden';
+  renderGenPreview();
+  await fetchIcon(dealToGenCard(d).icon);
+  renderGenPreview();
+}
+function closeGenModal(){ genModal.hidden=true; document.body.style.overflow=''; }
+function genFileName(){
+  const d=genState.deal;
+  const r=genState.mode==='wide'?'1200x900':genState.mode==='gbp'?'1200x675':'1080x1080';
+  const fam=d.family.replace(/[\s吋\/]/g,"");
+  return `${storeSlug()}_${STORE.date.replace(/\//g,"")}_${fam}_${r}.${genState.fmt}`;
+}
+async function downloadGen(){
+  if(typeof htmlToImage==='undefined'){ genStatus.textContent='需連網載入工具，請連網後重試'; return; }
+  const node=genScaler.firstElementChild; if(!node) return;
+  genStatus.textContent='產生中…';
+  try{
+    const url=await nodeToImg(node, genState.fmt);
+    const a=document.createElement('a'); a.href=url; a.download=genFileName(); a.click();
+    genStatus.textContent='已下載 ✓';
+  }catch(e){ genStatus.textContent='失敗，請重試'; console.error(e); }
+}
+
+/* ════════════════ 事件綁定 ════════════════ */
+qInput.addEventListener("input",()=>{state.q=qInput.value.trim().toLowerCase(); render();});
+catSel.addEventListener("change",()=>{state.cat=catSel.value; render();});
+typeSel.addEventListener("change",()=>{state.type=typeSel.value; render();});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  state.q=""; state.cat=""; state.type=""; qInput.value=""; catSel.value=""; typeSel.value=""; render();
+});
+document.getElementById("toggleAll").addEventListener("click",e=>{
+  const dets=[...document.querySelectorAll(".grp")].filter(d=>!d.hidden);
+  const anyClosed=dets.some(d=>!d.open);
+  dets.forEach(d=>d.open=anyClosed);
+  e.target.textContent=anyClosed?"全部收合":"全部展開";
+});
+
+// 門市設定欄位
+function bindStoreInput(id, key){
+  const el=document.getElementById(id); el.value=STORE[key];
+  el.addEventListener("input",()=>{ STORE[key]=el.value.trim()||STORE[key]; buildGroups(); render(); updateStats(); });
+}
+bindStoreInput("inName","name"); bindStoreInput("inAddr","addr"); bindStoreInput("inTag","tag"); bindStoreInput("inDate","date");
+
+// 上傳
+const fileInput=document.getElementById("fileInput");
+const drop=document.getElementById("drop");
+fileInput.addEventListener("change",e=>handleFile(e.target.files[0]));
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault(); drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault(); drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+// 編輯器
+document.getElementById("addRow").addEventListener("click",()=>addEditorRow());
+document.getElementById("applyRows").addEventListener("click",applyEditor);
+document.getElementById("reloadPreset").addEventListener("click",()=>{ loadPreset(); STORE.date="6/19-7/9"; document.getElementById("inDate").value=STORE.date; buildEditor(); rerenderAll(); });
+
+// 出圖 modal
+document.getElementById('genClose').addEventListener('click', closeGenModal);
+genModal.addEventListener('click', e=>{ if(e.target===genModal) closeGenModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !genModal.hidden) closeGenModal(); });
+document.getElementById('genModeSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-m]'); if(!b) return;
+  genState.mode=b.dataset.m;
+  [...e.currentTarget.querySelectorAll('button')].forEach(x=>x.classList.toggle('on', x===b));
+  renderGenPreview();
+});
+document.getElementById('genFmtSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button[data-f]'); if(!b) return;
+  genState.fmt=b.dataset.f;
+  [...e.currentTarget.querySelectorAll('button')].forEach(x=>x.classList.toggle('on', x===b));
+});
+document.getElementById('genDownload').addEventListener('click', downloadGen);
+window.addEventListener('resize', ()=>{ if(!genModal.hidden) renderGenPreview(); });
+
+/* ════════════════ 預抓圖示（出圖秒開、匯出穩定） ════════════════ */
+async function prefetchIcons(){
+  try{ if(document.fonts && document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const need=new Set(Object.values(TYPE_ICON));
+  await Promise.all([...need].map(fetchIcon));
+}
+
+/* ════════════════ 初始化 ════════════════ */
+loadPreset();
+buildEditor();
+rerenderAll();
+</script>
+</body>
+</html>
